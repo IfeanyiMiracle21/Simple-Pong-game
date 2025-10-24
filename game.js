@@ -2,6 +2,9 @@ const canvas = document.getElementById('pongCanvas');
 const ctx = canvas.getContext('2d');
 const pauseBtn = document.getElementById('pauseBtn');
 const canvasWrapper = document.getElementById('canvasWrapper');
+const gameOverMsg = document.getElementById('gameOverMsg');
+const winnerMsg = document.getElementById('winnerMsg');
+const restartBtn = document.getElementById('restartBtn');
 
 // Game settings
 const paddleWidth = 12, paddleHeight = 80;
@@ -15,16 +18,16 @@ let ballSpeedX = 0, ballSpeedY = 0;
 let playerScore = 0, aiScore = 0;
 let paused = false;
 let animationFrame;
+const WINNING_SCORE = 5;
+let gameOver = false;
 
 // Responsive resize
 function resizeCanvas() {
-  // Use max-width for responsive
   let w = Math.min(window.innerWidth, 800);
   let h = w * 0.5; // Keep aspect ratio
   canvas.width = w;
   canvas.height = h;
   aiX = canvas.width - paddleWidth - 10;
-  // Reset positions for new size
   playerY = (canvas.height - paddleHeight) / 2;
   aiY = (canvas.height - paddleHeight) / 2;
   resetBall();
@@ -38,13 +41,13 @@ function setPlayerPaddle(y) {
   if (playerY + paddleHeight > canvas.height) playerY = canvas.height - paddleHeight;
 }
 canvas.addEventListener('mousemove', function(e) {
-  if (paused) return;
+  if (paused || gameOver) return;
   const rect = canvas.getBoundingClientRect();
   const mouseY = e.clientY - rect.top;
   setPlayerPaddle(mouseY);
 });
 canvas.addEventListener('touchmove', function(e) {
-  if (paused) return;
+  if (paused || gameOver) return;
   const rect = canvas.getBoundingClientRect();
   if (e.touches.length > 0) {
     const touchY = e.touches[0].clientY - rect.top;
@@ -54,10 +57,46 @@ canvas.addEventListener('touchmove', function(e) {
 
 // Pause/play button
 pauseBtn.addEventListener('click', function() {
+  if (gameOver) return;
   paused = !paused;
   pauseBtn.textContent = paused ? 'Play' : 'Pause';
   if (!paused) gameLoop();
 });
+
+// Restart button
+restartBtn.addEventListener('click', function() {
+  gameOverMsg.style.display = 'none';
+  playerScore = 0;
+  aiScore = 0;
+  gameOver = false;
+  pauseBtn.style.display = '';
+  pauseBtn.textContent = 'Pause';
+  resizeCanvas();
+  gameLoop();
+});
+
+// Sound effects
+function playBeep(frequency = 440, duration = 80, volume = 0.2) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'square';
+    oscillator.frequency.value = frequency;
+    gain.gain.value = volume;
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    setTimeout(() => {
+      oscillator.stop();
+      ctx.close();
+    }, duration);
+  } catch (e) { /* ignore sound errors on unsupported devices */ }
+}
+
+function playScoreSound() {
+  playBeep(220, 200, 0.4);
+}
 
 // Draw everything
 function draw() {
@@ -87,7 +126,7 @@ function draw() {
   ctx.fillText(playerScore, canvas.width / 2 - 60, 50);
   ctx.fillText(aiScore, canvas.width / 2 + 40, 50);
 
-  if (paused) {
+  if (paused && !gameOver) {
     ctx.font = `${canvas.width > 400 ? 48 : 28}px Arial`;
     ctx.fillStyle = '#fff';
     ctx.globalAlpha = 0.7;
@@ -98,16 +137,15 @@ function draw() {
 
 // Ball and game logic
 function update() {
-  // Only update when not paused
-  if (paused) return;
+  if (paused || gameOver) return;
 
-  // Move ball
   ballX += ballSpeedX;
   ballY += ballSpeedY;
 
   // Wall collision
   if (ballY - ballRadius < 0 || ballY + ballRadius > canvas.height) {
     ballSpeedY = -ballSpeedY;
+    playBeep(600, 60, 0.18);
   }
 
   // Player paddle collision
@@ -119,6 +157,7 @@ function update() {
     ballSpeedX = Math.abs(ballSpeedX);
     let deltaY = ballY - (playerY + paddleHeight / 2);
     ballSpeedY += deltaY * 0.08;
+    playBeep(440, 60, 0.2);
   }
 
   // AI paddle collision
@@ -130,14 +169,19 @@ function update() {
     ballSpeedX = -Math.abs(ballSpeedX);
     let deltaY = ballY - (aiY + paddleHeight / 2);
     ballSpeedY += deltaY * 0.08;
+    playBeep(320, 60, 0.18);
   }
 
   // Score check
   if (ballX - ballRadius < 0) {
     aiScore++;
+    playScoreSound();
+    checkGameOver();
     resetBall();
   } else if (ballX + ballRadius > canvas.width) {
     playerScore++;
+    playScoreSound();
+    checkGameOver();
     resetBall();
   }
 
@@ -153,6 +197,19 @@ function update() {
   if (aiY + paddleHeight > canvas.height) aiY = canvas.height - paddleHeight;
 }
 
+function checkGameOver() {
+  if (playerScore >= WINNING_SCORE || aiScore >= WINNING_SCORE) {
+    gameOver = true;
+    pauseBtn.style.display = 'none';
+    gameOverMsg.style.display = '';
+    winnerMsg.textContent =
+      playerScore >= WINNING_SCORE
+        ? 'You Win! 🎉'
+        : 'AI Wins! 🤖';
+    cancelAnimationFrame(animationFrame);
+  }
+}
+
 function resetBall() {
   ballX = canvas.width / 2;
   ballY = canvas.height / 2;
@@ -164,7 +221,7 @@ function resetBall() {
 function gameLoop() {
   update();
   draw();
-  if (!paused) {
+  if (!paused && !gameOver) {
     animationFrame = requestAnimationFrame(gameLoop);
   }
 }
