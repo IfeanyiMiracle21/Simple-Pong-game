@@ -26,7 +26,7 @@ h1 {
   box-shadow: 0 0 20px #000;
 }
 
-#pauseBtn {
+#pauseBtn, #restartBtn {
   background: #fff;
   color: #222;
   font-size: 20px;
@@ -38,6 +38,18 @@ h1 {
   transition: background 0.2s;
 }
 
-#pauseBtn:active {
+#pauseBtn:active, #restartBtn:active {
   background: #eee;
+}
+
+#gameOverMsg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  background: rgba(0,0,0,0.8);
+  padding: 32px 48px;
+  border-radius: 12px;
+  box-shadow: 0 0 32px #000;
+  z-index: 2;
 }
